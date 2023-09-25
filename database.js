@@ -5,29 +5,17 @@ const URL =
 
 const pool = new pg.Pool({
   connectionString: URL,
-  max: 35,
+  max: 45,
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 0,
 })
 
-let connection
 
 pool.on('error', connect)
-pool.on('connect', () => {
-  return pool.query(`
-    create table if not exists pessoas (
-        id uuid unique not null,
-        apelido varchar(32) unique not null,
-        nome varchar(100) not null,
-        nascimento DATE,
-        stack JSON
-    );
-  
-  `)
-})
+
 async function connect() {
   try {
-    connection = await pool.connect()
+     await pool.connect()
     console.log('connected to database')
   } catch (error) {
     console.error('connection error', error.stack)
@@ -71,9 +59,7 @@ export const getPerson = async (id) => {
 export const getPeople = async (term) => {
   const query = `
   select * from pessoas
-  where nome ILIKE $1
-  OR apelido ILIKE $1
-  OR stack::text ILIKE $1
+  where searchable ILIKE $1
   limit 50
     `
   return pool.query(query, [`%${term}%`])

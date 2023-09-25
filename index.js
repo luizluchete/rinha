@@ -1,11 +1,13 @@
 import express from 'express'
 import { v4 as uuid } from 'uuid'
+import cluster from 'cluster'
+import os from 'os'
 import { countPerson, createPerson, getPerson, getPeople } from './database.js'
 import { validateBody } from './validators.js'
 
 const app = express()
 
-const PORT = process.env.HTTP_PORT || 8080
+const PORT = process.env.HTTP_PORT || 9999
 
 app.use(express.json())
 
@@ -70,26 +72,39 @@ app.get('/contagem-pessoas', (request, response) => {
 })
 
 
-
-
-const server = app.listen(PORT, () => {
-  console.log(`server runing on port ${PORT}`)
-  console.log('process', process.pid)
-})
-
-// SIGINT => Crtl+C
-// SIGTERM => kill
-
-const onStop = async (signal) => {
-  console.log(`\n${signal} signal received`)
-
-  console.log('closing HTTP server ')
-
-  server.close(() => {
-    console.log('Http server closed.')
+export function startServer(){
+  app.listen(PORT, () => {
+    console.log(`server runing on port ${PORT}`)
+    console.log('process', process.pid)
   })
-  process.exit(0)
+
+  // setTimeout(() => process.exit(1), Math.random() * 1e4)
 }
 
 
-['SIGINT', 'SIGTERM'].map((event) => process.on(event, onStop))
+function tunning(){
+
+  if(!cluster.isPrimary){
+    startServer()
+    return
+  }
+
+  const cpusNumber = os.cpus().length
+
+  console.log(`Primary ${process.pid} is running`)
+
+  console.log(`Forking for ${cpusNumber} CPUs\n`)
+  for (let i = 0; i < cpusNumber; i++) {
+    cluster.fork()
+  }
+
+
+  cluster.on('exit', (worker, code, signal) => {
+    if(code !== 0 && !worker.exitedAfterDisconnect){
+      console.log(`Worker ${worker.process.pid} died with code ${code} signal ${signal}`)
+      cluster.fork()
+    }
+  })
+}
+tunning()
+
